@@ -198,6 +198,24 @@ const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.fl
 
 /* ---------- Données ---------- */
 
+// Charges de départ estimées pour 59 kg de poids de corps, débutant, viser 2-3 reps en réserve.
+const DEPARTS = {
+  'Développé couché': 25, 'Tirage vertical': 30, 'Développé épaules': 15, 'Rowing assis': 30,
+  'Écarté pec deck': 20, 'Oiseau (deltoïde arrière)': 15, 'Curl biceps': 15, 'Extension triceps': 20,
+  'Presse à cuisses': 60, 'Leg extension': 25, 'Leg curl assis': 25, 'Abducteurs': 30,
+  'Mollets à la presse': 60, 'Crunch machine': 20, 'Extension lombaire': 25
+};
+// Pose les charges estimées sur les exercices encore jamais faits et sans charge de départ.
+function applyDeparts(s) {
+  const done = new Set(s.series.map(x => x.ex));
+  for (const fe of s.ficheEx) {
+    const ex = s.exercises.find(e => e.id === fe.ex);
+    if (ex && !num(fe.depart) && !done.has(ex.id) && DEPARTS[ex.nom]) fe.depart = DEPARTS[ex.nom];
+  }
+  s.settings.departsV1 = true;
+  return s;
+}
+
 function seed() {
   const exercises = [], fiches = [], ficheEx = [];
   const E = (nom, machine, muscle, inc, repos) => { const e = { id: uid(), nom, machine, muscle, inc, repos, reglages: '' }; exercises.push(e); return e.id; };
@@ -223,13 +241,13 @@ function seed() {
   F('Fiche 1 · Haut du corps', 1, [[chest,3,10,12],[lat,3,10,12],[shoulder,3,10,12],[row,3,10,12],[fly,3,12,15],[rear,3,12,15]]);
   F('Fiche 2 · Bas du corps & Abdos', 2, [[press,3,10,12],[legext,3,12,15],[legcurl,3,10,12],[abduct,3,12,15],[calf,3,12,15],[crunch,3,12,15],[lomb,3,12,15]]);
   F('Fiche 3 · Full Body & Bras', 3, [[press,3,10,12],[chest,3,10,12],[lat,3,10,12],[curl,3,10,12],[tri,3,10,12],[crunch,3,12,15]]);
-  return { v: 1, exercises, fiches, ficheEx, seances: [], series: [], mesures: [], settings: { ...DEFAULT_SETTINGS }, cur: null };
+  return applyDeparts({ v: 1, exercises, fiches, ficheEx, seances: [], series: [], mesures: [], settings: { ...DEFAULT_SETTINGS }, cur: null });
 }
 
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.v) { s.settings = { ...DEFAULT_SETTINGS, ...s.settings }; return s; }
+    if (s && s.v) { s.settings = { ...DEFAULT_SETTINGS, ...s.settings }; return s.settings.departsV1 ? s : applyDeparts(s); }
   } catch (e) {}
   return seed();
 }
@@ -296,7 +314,7 @@ function propose(fe) {
   const inc = num(ex.inc) || 2.5, n = Math.max(1, num(fe.series) || 3), rmin = num(fe.rmin), rmax = num(fe.rmax);
   const fill = v => Array(n).fill(v);
   const h = hist()[fe.ex] || [];
-  if (!h.length) return { charge: num(fe.depart), reps: fill(rmin), n, delta: null, reason: 'Première fois : règle la charge sur la machine', first: true };
+  if (!h.length) return { charge: num(fe.depart), reps: fill(rmin), n, delta: null, reason: num(fe.depart) ? 'Première fois : charge de départ estimée, ajuste-la à la 1re série' : 'Première fois : règle la charge sur la machine', first: true };
 
   const last = h.at(-1);
   const lc = maxCharge(last.sets);
